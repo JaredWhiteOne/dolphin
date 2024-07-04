@@ -27,7 +27,8 @@
 #include "Core/IOS/IOS.h"
 #include "Core/State.h"
 #include "Core/System.h"
-
+typedef std::chrono::high_resolution_clock::time_point TimeVar;
+#define timeNow() std::chrono::high_resolution_clock::now()
 namespace HW
 {
 void Init(Core::System& system, const Sram* override_sram)
@@ -84,7 +85,10 @@ void Shutdown(Core::System& system)
 
 void DoState(Core::System& system, PointerWrap& p)
 {
+  TimeVar t1 = timeNow();
   system.GetMemory().DoState(p);
+  std::chrono::duration<double, std::milli> ms_double = timeNow() - t1;
+  INFO_LOG_FMT(CONSOLE, "MEMORY: {}\n", ms_double.count());
   p.DoMarker("Memory");
   system.GetMemoryInterface().DoState(p);
   p.DoMarker("MemoryInterface");

@@ -108,6 +108,9 @@ constexpr u32 COMPRESSED_DATA_OFFSET = 0;
 
 constexpr u32 COOKIE_BASE = 0xBAADBABE;
 
+typedef std::chrono::high_resolution_clock::time_point TimeVar;
+#define timeNow() std::chrono::high_resolution_clock::now()
+
 // Maps savestate versions to Dolphin versions.
 // Versions after 42 don't need to be added to this list,
 // because they save the exact Dolphin version to savestates.
@@ -173,30 +176,54 @@ static void DoState(Core::System& system, PointerWrap& p)
 
   // Movie must be done before the video backend, because the window is redrawn in the video backend
   // state load, and the frame number must be up-to-date.
+  TimeVar t1 = timeNow();
   system.GetMovie().DoState(p);
+  std::chrono::duration<double, std::milli> ms_double = timeNow() - t1;
+  INFO_LOG_FMT(CONSOLE, "MOVIE: {}\n", ms_double.count());
   p.DoMarker("Movie");
 
   // Begin with video backend, so that it gets a chance to clear its caches and writeback modified
   // things to RAM
+  t1 = timeNow();
   g_video_backend->DoState(p);
+  ms_double = timeNow() - t1;
+  INFO_LOG_FMT(CONSOLE, "VIDEO BACKEND: {}\n", ms_double.count());
   p.DoMarker("video_backend");
 
   // CoreTiming needs to be restored before restoring Hardware because
   // the controller code might need to schedule an event if the controller has changed.
+  
+  t1 = timeNow();
   system.GetCoreTiming().DoState(p);
+  ms_double = timeNow() - t1;
+  INFO_LOG_FMT(CONSOLE, "CORE TIMING: {}\n", ms_double.count());
   p.DoMarker("CoreTiming");
 
   // HW needs to be restored before PowerPC because the data cache might need to be flushed.
+  t1 = timeNow();
   HW::DoState(system, p);
+  ms_double = timeNow() - t1;
+  INFO_LOG_FMT(CONSOLE, "HW: {}\n", ms_double.count());
   p.DoMarker("HW");
 
+  t1 = timeNow();
   system.GetPowerPC().DoState(p);
+  ms_double = timeNow() - t1;
+  INFO_LOG_FMT(CONSOLE, "PowerPC: {}\n", ms_double.count());
   p.DoMarker("PowerPC");
 
   if (system.IsWii())
+  {
+    t1 = timeNow();
     Wiimote::DoState(p);
+    ms_double = timeNow() - t1;
+    INFO_LOG_FMT(CONSOLE, "WIIMOTE: {}\n", ms_double.count());
+  }
   p.DoMarker("Wiimote");
+  t1 = timeNow();
   Gecko::DoState(p);
+  ms_double = timeNow() - t1;
+  INFO_LOG_FMT(CONSOLE, "GECKO: {}\n", ms_double.count());
   p.DoMarker("Gecko");
 
 #ifdef USE_RETRO_ACHIEVEMENTS
@@ -495,7 +522,13 @@ void SaveAs(Core::System& system, const std::string& filename, bool wait)
         current_buffer.resize(buffer_size);
         ptr = current_buffer.data();
         PointerWrap p(&ptr, buffer_size, PointerWrap::Mode::Write);
+        INFO_LOG_FMT(CONSOLE, "-----------------------------------------------------\n");
+        auto t1 = timeNow();
         DoState(system, p);
+        std::chrono::duration<double, std::milli> ms_double = timeNow() - t1;
+        INFO_LOG_FMT(CONSOLE, "SAVE: {}\n", ms_double.count());
+        INFO_LOG_FMT(CONSOLE, "-----------------------------------------------------\n");
+        
 
         if (p.IsWriteMode())
         {
@@ -901,7 +934,12 @@ void LoadAs(Core::System& system, const std::string& filename)
           {
             u8* ptr = buffer.data();
             PointerWrap p(&ptr, buffer.size(), PointerWrap::Mode::Read);
+            INFO_LOG_FMT(CONSOLE, "-----------------------------------------------------\n");
+            auto t1 = timeNow();
             DoState(system, p);
+            std::chrono::duration<double, std::milli> ms_double = timeNow() - t1;
+            INFO_LOG_FMT(CONSOLE, "LOAD: {}\n", ms_double.count());
+            INFO_LOG_FMT(CONSOLE, "-----------------------------------------------------\n");
             loaded = true;
             loadedSuccessfully = p.IsReadMode();
           }
